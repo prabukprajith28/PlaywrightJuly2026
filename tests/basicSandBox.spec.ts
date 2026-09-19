@@ -18,6 +18,7 @@ test.describe('basic sandbox', () => {
     await expect(page.getByText('Static dropdown selected: Easy.')).toBeVisible();
   });
 
+  
   test('Input, checkbox, radio handling', async ({ page }) => {
     await page.goto(baseUrl);
 
