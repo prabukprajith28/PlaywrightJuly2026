@@ -1,0 +1,12 @@
+[
+  {
+    "userName": "standard_user",
+    "password": "secret_sauce",
+    "expected": "Sauce Labs Backpack"
+  },
+  {
+    "userName": "problem_user",
+    "password": "secret_sauce",
+    "expected": "Sauce Labs Bike Light"
+  }
+]

@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Playwright Real-world Locator Practice</title>
+  <style>
+    :root { --border:#e5e5e5; --muted:#666; }
+    body { font-family: Arial, sans-serif; padding: 18px; line-height: 1.4; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .muted { color: var(--muted); font-size: 0.92rem; }
+    .grid { display:grid; grid-template-columns: 1fr 320px; gap: 14px; margin-top: 14px; }
+    .panel { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background:#fff; }
+    .row { display:flex; gap: 10px; align-items:center; flex-wrap:wrap; }
+    .spacer { flex:1; }
+    input, select, button, textarea { padding: 8px 10px; border:1px solid #ccc; border-radius: 8px; font: inherit; }
+    button { cursor:pointer; }
+    button.primary { border-color:#222; background:#222; color:#fff; }
+    button.ghost { background:#f7f7f7; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align:left; }
+    th { font-size: 0.92rem; color:#333; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #bbb; font-size:0.8rem; }
+    .badge.ok { border-color:#4caf50; }
+    .badge.warn { border-color:#ff9800; }
+    .badge.danger { border-color:#f44336; }
+    .tabs { display:flex; gap:8px; margin: 8px 0 12px; }
+    .tab { padding: 8px 10px; border: 1px solid var(--border); border-radius: 999px; background:#f7f7f7; }
+    .tab[aria-selected="true"] { background:#222; color:#fff; border-color:#222; }
+    .hidden { display:none; }
+
+    /* Modal */
+    .backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:none; }
+    .modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(680px, 92vw);
+             border-radius: 12px; background:#fff; border:1px solid var(--border); padding: 14px; display:none; }
+    .modal header { margin-bottom: 10px; }
+    .modal .two { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .error { color:#b00020; font-size:0.9rem; margin-top:6px; }
+
+    /* Toast */
+    #toastHost { position: fixed; right: 14px; top: 14px; display:flex; flex-direction:column; gap:8px; }
+    .toast { padding: 10px 12px; border-radius: 10px; background:#222; color:#fff; min-width: 240px; }
+    .toast .muted { color: #ddd; }
+
+    /* Loading */
+    .spinner { display:flex; align-items:center; gap:10px; }
+    .dot { width:10px; height:10px; border-radius:999px; background:#222; animation: pulse 0.9s infinite alternate; }
+    .dot:nth-child(2){ animation-delay:0.15s; }
+    .dot:nth-child(3){ animation-delay:0.3s; }
+    @keyframes pulse { from { opacity:0.2; } to { opacity:1; } }
+
+    /* Cards list */
+    .cards { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+    .card { border:1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .card h4 { margin:0 0 6px; }
+    .card .meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+
+<header role="banner" aria-label="App Header">
+  <div class="row">
+    <img
+      alt="Acme CRM Logo"
+      title="Acme CRM"
+      width="42"
+      height="42"
+      src="data:image/svg+xml;utf8,
+      <svg xmlns='http://www.w3.org/2000/svg' width='42' height='42'>
+        <rect width='42' height='42' fill='%23f2f2f2' rx='9'/>
+        <text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle'
+              font-family='Arial' font-size='12' fill='%23333'>ACME</text>
+      </svg>"
+    />
+    <div>
+      <div style="font-weight:700; font-size:1.1rem;">Acme CRM</div>
+      <div class="muted">Locator practice: tables, modals, tabs, async, filters</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button type="button" class="ghost" title="Open Help" aria-label="Help">?</button>
+    <button type="button" class="primary" data-testid="new-customer" id="btnNewCustomer">
+      New Customer
+    </button>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- Main area -->
+  <main class="panel" role="main" aria-label="Customers Main">
+    <div class="row">
+      <label for="globalSearch" style="font-weight:600;">Search</label>
+      <input id="globalSearch" type="search" placeholder="Search customers by name or email" />
+      <div class="spacer"></div>
+
+      <label for="statusFilter" style="font-weight:600;">Status</label>
+      <select id="statusFilter" aria-label="Status Filter">
+        <option value="all">All</option>
+        <option value="active">Active</option>
+        <option value="trial">Trial</option>
+        <option value="blocked">Blocked</option>
+      </select>
+
+      <button type="button" id="btnReload" data-testid="reload">Reload</button>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Customer Views">
+      <button class="tab" role="tab" aria-selected="true" aria-controls="tabTable" id="tabTableBtn">Table</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tabCards" id="tabCardsBtn">Cards</button>
+    </div>
+
+    <!-- Async area -->
+    <section aria-label="Customers Content">
+      <div id="loading" class="spinner" role="status" aria-label="Loading Customers">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span class="muted">Loading customers…</span>
+      </div>
+
+      <!-- TABLE VIEW -->
+      <section id="tabTable" role="region" aria-label="Customers Table" class="hidden">
+        <table aria-label="Customer Data Table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Plan</th>
+              <th>Status</th>
+              <th aria-label="Actions Column">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="customerRows"></tbody>
+        </table>
+        <div class="muted" style="margin-top:10px;">
+          Practice: filter rows by hasText / has(button), chain within a row, use nth/first/last.
+        </div>
+      </section>
+
+      <!-- CARDS VIEW -->
+      <section id="tabCards" role="region" aria-label="Customers Cards" class="hidden">
+        <div class="cards" id="customerCards"></div>
+        <div class="muted" style="margin-top:10px;">
+          Practice: getByRole('article') scoping, filter({ hasText: 'Trial' }), chain to buttons inside.
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- Right sidebar -->
+  <aside class="panel" role="complementary" aria-label="Activity Sidebar">
+    <h3 style="margin-top:0;">Recent Activity</h3>
+
+    <div class="row">
+      <button type="button" class="ghost" id="btnAddNote" data-testid="add-note">Add Note</button>
+      <button type="button" class="ghost" id="btnClearActivity" title="Clear activity list">Clear</button>
+    </div>
+
+    <ul role="list" aria-label="Activity List" id="activityList" style="padding-left:18px;">
+      <li role="listitem">System initialized</li>
+    </ul>
+
+    <hr style="border:none;border-top:1px solid var(--border); margin:12px 0;" />
+
+    <h4>Support</h4>
+    <p class="muted">Try getByTitle() on the Help button, and chaining in this sidebar.</p>
+
+    <a href="#" role="link" aria-label="Open Support Portal" title="Support Portal">Support Portal</a>
+  </aside>
+</div>
+
+<!-- MODAL -->
+<div class="backdrop" id="backdrop" aria-hidden="true"></div>
+
+<div class="modal" id="modal" role="dialog" aria-label="Create Customer Dialog" aria-modal="true">
+  <header class="row">
+    <div>
+      <div style="font-weight:700; font-size:1.1rem;">Create Customer</div>
+      <div class="muted">Fill the form and Save</div>
+    </div>
+    <div class="spacer"></div>
+    <button type="button" aria-label="Close Dialog" title="Close Dialog" id="btnCloseModal">✕</button>
+  </header>
+
+  <form id="customerForm">
+    <div class="two">
+      <div>
+        <label for="fullName">Full Name</label><br/>
+        <input id="fullName" type="text" placeholder="e.g. Priya Sharma" />
+        <div class="error hidden" id="errName">Name is required</div>
+      </div>
+
+      <div>
+        <label for="email">Email</label><br/>
+        <input id="email" type="email" placeholder="e.g. priya@example.com" />
+        <div class="error hidden" id="errEmail">Valid email is required</div>
+      </div>
+
+      <div>
+        <label for="plan">Plan</label><br/>
+        <select id="plan" aria-label="Plan Select">
+          <option value="">Select plan</option>
+          <option value="Free">Free</option>
+          <option value="Pro">Pro</option>
+          <option value="Enterprise">Enterprise</option>
+        </select>
+        <div class="error hidden" id="errPlan">Plan is required</div>
+      </div>
+
+      <div>
+        <label for="status">Status</label><br/>
+        <select id="status" aria-label="Status Select">
+          <option value="trial">Trial</option>
+          <option value="active">Active</option>
+          <option value="blocked">Blocked</option>
+        </select>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label for="notes">Notes</label><br/>
+        <textarea id="notes" rows="3" placeholder="Add notes about this customer..."></textarea>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label>
+          <input id="newsletter" type="checkbox" />
+          Subscribe to newsletter
+        </label>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label for="avatarUpload">Avatar (fake upload)</label><br/>
+        <input id="avatarUpload" type="file" aria-label="Avatar Upload" />
+        <div class="muted">You can practice setInputFiles() in Playwright.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top: 12px;">
+      <button type="button" class="ghost" id="btnCancelModal">Cancel</button>
+      <div class="spacer"></div>
+      <button type="button" class="primary" data-testid="save-customer" id="btnSaveCustomer">Save</button>
+    </div>
+  </form>
+</div>
+
+<div id="toastHost" aria-label="Toast Notifications"></div>
+
+<script>
+  const customers = [
+    { name: "Arun Kumar",  email:"arun@acme.com",  plan:"Pro",        status:"active"  },
+    { name: "Divya Iyer",  email:"divya@acme.com", plan:"Free",       status:"trial"   },
+    { name: "Meera Nair",  email:"meera@acme.com", plan:"Enterprise", status:"active"  },
+    { name: "Rahul Singh", email:"rahul@acme.com", plan:"Pro",        status:"blocked" },
+    { name: "Priya Sharma",email:"priya@acme.com", plan:"Free",       status:"trial"   },
+    { name: "Karthik M",   email:"karthik@acme.com", plan:"Pro",      status:"active"  }
+  ];
+
+  const state = { view: "table", loaded: false };
+
+  const loadingEl = document.getElementById("loading");
+  const tabTable = document.getElementById("tabTable");
+  const tabCards = document.getElementById("tabCards");
+  const customerRows = document.getElementById("customerRows");
+  const customerCards = document.getElementById("customerCards");
+  const globalSearch = document.getElementById("globalSearch");
+  const statusFilter = document.getElementById("statusFilter");
+  const activityList = document.getElementById("activityList");
+
+  const toastHost = document.getElementById("toastHost");
+
+  function toast(title, detail) {
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.innerHTML = `<div style="font-weight:700">${title}</div><div class="muted">${detail || ""}</div>`;
+    toastHost.appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+  }
+
+  function badge(status) {
+    const cls = status === "active" ? "ok" : status === "trial" ? "warn" : "danger";
+    const label = status.charAt(0).toUpperCase() + status.slice(1);
+    return `<span class="badge ${cls}" aria-label="Status ${label}">${label}</span>`;
+  }
+
+  function logActivity(text) {
+    const li = document.createElement("li");
+    li.setAttribute("role", "listitem");
+    li.textContent = text;
+    activityList.appendChild(li);
+  }
+
+  function render() {
+    const q = globalSearch.value.trim().toLowerCase();
+    const status = statusFilter.value;
+
+    const filtered = customers.filter(c => {
+      const matchesQ = !q || c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+      const matchesStatus = status === "all" || c.status === status;
+      return matchesQ && matchesStatus;
+    });
+
+    // Table
+    customerRows.innerHTML = filtered.map((c, i) => `
+      <tr role="row" data-testid="customer-row">
+        <td>${c.name}</td>
+        <td><span title="Customer Email">${c.email}</span></td>
+        <td>${c.plan}</td>
+        <td>${badge(c.status)}</td>
+        <td>
+          <button type="button" aria-label="View Customer" data-testid="view">View</button>
+          <button type="button" aria-label="Edit Customer" data-testid="edit">Edit</button>
+          <button type="button" aria-label="Delete Customer" data-testid="delete">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+
+    // Cards
+    customerCards.innerHTML = filtered.map(c => `
+      <article class="card" role="article" aria-label="Customer Card">
+        <h4>${c.name}</h4>
+        <div class="meta">
+          <span class="muted" title="Email">${c.email}</span>
+          <span class="badge" aria-label="Plan ${c.plan}">${c.plan}</span>
+          ${badge(c.status)}
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" aria-label="Card View" data-testid="card-view">View</button>
+          <button type="button" aria-label="Card Edit" data-testid="card-edit">Edit</button>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function showView(view) {
+    state.view = view;
+    // tab state
+    document.getElementById("tabTableBtn").setAttribute("aria-selected", view === "table");
+    document.getElementById("tabCardsBtn").setAttribute("aria-selected", view === "cards");
+    tabTable.classList.toggle("hidden", view !== "table");
+    tabCards.classList.toggle("hidden", view !== "cards");
+  }
+
+  function fakeLoad() {
+    state.loaded = false;
+    loadingEl.classList.remove("hidden");
+    tabTable.classList.add("hidden");
+    tabCards.classList.add("hidden");
+
+    setTimeout(() => {
+      state.loaded = true;
+      loadingEl.classList.add("hidden");
+      showView(state.view);
+      render();
+      toast("Loaded", "Customer data loaded");
+      logActivity("Customers loaded");
+    }, 850);
+  }
+
+  // Tabs
+  document.getElementById("tabTableBtn").addEventListener("click", () => showView("table"));
+  document.getElementById("tabCardsBtn").addEventListener("click", () => showView("cards"));
+
+  // Filter inputs
+  globalSearch.addEventListener("input", () => { render(); logActivity("Search changed"); });
+  statusFilter.addEventListener("change", () => { render(); logActivity("Status filter changed"); });
+
+  // Reload
+  document.getElementById("btnReload").addEventListener("click", () => fakeLoad());
+
+  // Sidebar actions
+  document.getElementById("btnAddNote").addEventListener("click", () => {
+    toast("Note", "A note was added");
+    logActivity("Note added");
+  });
+
+  document.getElementById("btnClearActivity").addEventListener("click", () => {
+    activityList.innerHTML = `<li role="listitem">Activity cleared</li>`;
+    toast("Cleared", "Activity cleared");
+  });
+
+  // Delegated table actions (simulate real apps)
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+
+    // table view buttons
+    if (t.matches('button[data-testid="view"], button[data-testid="edit"], button[data-testid="delete"]')) {
+      const row = t.closest('tr[data-testid="customer-row"]');
+      const name = row?.children?.[0]?.textContent || "Unknown";
+      const action = t.getAttribute("data-testid");
+      toast("Action", `${action} clicked for ${name}`);
+      logActivity(`${action} clicked: ${name}`);
+    }
+
+    // cards view buttons
+    if (t.matches('button[data-testid="card-view"], button[data-testid="card-edit"]')) {
+      const card = t.closest('article[role="article"]');
+      const name = card?.querySelector("h4")?.textContent || "Unknown";
+      toast("Card Action", `${t.getAttribute("data-testid")} for ${name}`);
+      logActivity(`card action: ${name}`);
+    }
+  });
+
+  // Modal
+  const backdrop = document.getElementById("backdrop");
+  const modal = document.getElementById("modal");
+  const btnNew = document.getElementById("btnNewCustomer");
+  const btnClose = document.getElementById("btnCloseModal");
+  const btnCancel = document.getElementById("btnCancelModal");
+  const btnSave = document.getElementById("btnSaveCustomer");
+
+  function openModal() {
+    backdrop.style.display = "block";
+    modal.style.display = "block";
+    backdrop.setAttribute("aria-hidden", "false");
+    toast("Dialog", "Create Customer opened");
+    logActivity("Create Customer opened");
+  }
+  function closeModal() {
+    backdrop.style.display = "none";
+    modal.style.display = "none";
+    backdrop.setAttribute("aria-hidden", "true");
+    document.getElementById("customerForm").reset();
+    hideErrors();
+    logActivity("Dialog closed");
+  }
+  function hideErrors() {
+    document.getElementById("errName").classList.add("hidden");
+    document.getElementById("errEmail").classList.add("hidden");
+    document.getElementById("errPlan").classList.add("hidden");
+  }
+  function validate() {
+    hideErrors();
+    const name = document.getElementById("fullName").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const plan = document.getElementById("plan").value.trim();
+    let ok = true;
+
+    if (!name) { document.getElementById("errName").classList.remove("hidden"); ok = false; }
+    if (!email || !email.includes("@")) { document.getElementById("errEmail").classList.remove("hidden"); ok = false; }
+    if (!plan) { document.getElementById("errPlan").classList.remove("hidden"); ok = false; }
+
+    return ok;
+  }
+
+  btnNew.addEventListener("click", openModal);
+  btnClose.addEventListener("click", closeModal);
+  btnCancel.addEventListener("click", closeModal);
+  backdrop.addEventListener("click", closeModal);
+
+  btnSave.addEventListener("click", () => {
+    if (!validate()) {
+      toast("Validation", "Fix errors and try again");
+      logActivity("Validation failed");
+      return;
+    }
+    toast("Saved", "Customer created successfully");
+    logActivity("Customer created");
+    closeModal();
+  });
+
+  // initial async load
+  fakeLoad();
+</script>
+
+</body>
+</html>

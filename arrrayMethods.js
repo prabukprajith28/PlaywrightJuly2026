@@ -1,0 +1,18 @@
+// let marks = [1,2,3,4,5]
+// console.log(marks)
+// marks.push(6)
+// console.log(marks)
+// marks.pop()
+// console.log(marks)
+// marks.shift()
+// console.log(marks)
+// marks.unshift(0)
+// console.log(marks)
+// marks.includes(0)
+// console.log(marks)
+// console.log(marks.includes(9))
+// console.log(marks.indexOf(3))
+const fruits = ["apple", "banana", "orange","kiwi","dragon"]
+fruits.splice(0,1,"mango")
+fruits.splice(0,3,"papaya")
+console.log(fruits)
